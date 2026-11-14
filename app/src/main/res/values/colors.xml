@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="medsafe_background">#FFF8F1</color>
+    <color name="medsafe_background_dark">#201713</color>
+    <color name="ic_launcher_background">#B5543A</color>
+</resources>
