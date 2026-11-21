@@ -12,7 +12,7 @@ import kotlin.math.ceil
 
 /**
  * Single place where a dose outcome is recorded. Both notification actions and the
- * in-app Today screen funnel through here so stock and alarms stay consistent.
+ * in-app Today screen funnel through here so stock and reminders stay consistent.
  */
 @Singleton
 class DoseActionHandler @Inject constructor(
@@ -20,15 +20,14 @@ class DoseActionHandler @Inject constructor(
     private val medicationDao: MedicationDao,
     private val profileDao: ProfileDao,
     private val notificationHelper: NotificationHelper,
-    private val alarmScheduler: AlarmScheduler,
+    private val reminderScheduler: ReminderScheduler,
     private val settingsRepository: SettingsRepository,
 ) {
     suspend fun markTaken(medId: Long, scheduledAt: Long) {
         val medication = medicationDao.getById(medId) ?: return
         val existing = medicationRepository.ensurePendingLog(medId, scheduledAt)
         notificationHelper.cancelDose(medId, scheduledAt)
-        alarmScheduler.cancelRenudge(medId, scheduledAt)
-        alarmScheduler.cancelSnooze(medId, scheduledAt)
+        reminderScheduler.cancelSnooze(medId, scheduledAt)
         if (existing.status == DoseStatus.TAKEN) return
 
         medicationRepository.recordStatus(medId, scheduledAt, DoseStatus.TAKEN)
@@ -48,16 +47,14 @@ class DoseActionHandler @Inject constructor(
         medicationRepository.ensurePendingLog(medId, scheduledAt)
         medicationRepository.recordStatus(medId, scheduledAt, DoseStatus.SKIPPED)
         notificationHelper.cancelDose(medId, scheduledAt)
-        alarmScheduler.cancelRenudge(medId, scheduledAt)
-        alarmScheduler.cancelSnooze(medId, scheduledAt)
+        reminderScheduler.cancelSnooze(medId, scheduledAt)
     }
 
     suspend fun snooze(medId: Long, scheduledAt: Long) {
         medicationRepository.ensurePendingLog(medId, scheduledAt)
         medicationRepository.recordStatus(medId, scheduledAt, DoseStatus.SNOOZED)
         notificationHelper.cancelDose(medId, scheduledAt)
-        alarmScheduler.cancelRenudge(medId, scheduledAt)
         val settings = settingsRepository.settings.first()
-        alarmScheduler.scheduleSnooze(medId, scheduledAt, settings.snoozeMinutes)
+        reminderScheduler.scheduleSnooze(medId, scheduledAt, settings.snoozeMinutes)
     }
 }

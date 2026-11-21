@@ -23,12 +23,16 @@ import com.medsafe.app.data.local.entity.MedicationEntity
 import com.medsafe.app.ui.components.PillPainter
 import com.medsafe.app.util.Format
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.time.Instant
+import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * All notifications live on two urgency-based channels. The "Taken / Snooze / Skip"
- * actions go to [DoseActionReceiver], so they work with the app closed.
+ * All notifications live on two urgency-based channels. The automatic dose notifications are
+ * the two daily digests; they are summaries and open Today when tapped. Snooze reminders are
+ * per-dose and carry "Taken / Snooze / Skip" actions that go to [DoseActionReceiver], so they
+ * work with the app closed.
  */
 @Singleton
 class NotificationHelper @Inject constructor(
@@ -47,6 +51,43 @@ class NotificationHelper @Inject constructor(
     fun updateDoseChannelSound(soundEnabled: Boolean) {
         notificationManager.deleteNotificationChannel(CHANNEL_DOSE)
         notificationManager.createNotificationChannel(doseChannel(soundEnabled))
+    }
+
+    /**
+     * One morning or evening summary replacing any earlier digest, so at most one digest
+     * notification is visible at a time. Snooze reminders still use [showDoseReminder].
+     */
+    fun showDigest(entries: List<DigestEntry>, evening: Boolean) {
+        if (entries.isEmpty()) return
+        val zone = ZoneId.systemDefault()
+        val lines = entries.map { entry ->
+            val time = Instant.ofEpochMilli(entry.scheduledAt).atZone(zone).toLocalTime()
+            "${entry.profileName}: ${entry.medication.name} — " +
+                "${Format.doseAmount(entry.medication)} at ${Format.time(time)}"
+        }
+        val title = if (evening) "Evening doses" else "Morning doses"
+        val count = entries.size
+        val builder = NotificationCompat.Builder(context, CHANNEL_DOSE)
+            .setSmallIcon(R.drawable.ic_stat_pill)
+            .setLargeIcon(pillBitmap(entries.first().medication))
+            .setContentTitle("$title · $count ${if (count == 1) "dose" else "doses"}")
+            .setContentText(lines.first())
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setAutoCancel(true)
+            .setContentIntent(openAppIntent())
+        if (lines.size == 1) {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(lines.first()))
+        } else {
+            val inbox = NotificationCompat.InboxStyle()
+            lines.take(MAX_DIGEST_LINES).forEach(inbox::addLine)
+            if (lines.size > MAX_DIGEST_LINES) {
+                inbox.setSummaryText("+${lines.size - MAX_DIGEST_LINES} more")
+            }
+            builder.setStyle(inbox)
+        }
+        notify(NotificationIds.DIGEST, builder.build())
     }
 
     fun showDoseReminder(
@@ -72,9 +113,9 @@ class NotificationHelper @Inject constructor(
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(false)
             .setContentIntent(openAppIntent())
-            .addAction(0, "Taken", doseActionIntent(AlarmActions.TAKE, medication.id, scheduledAt))
-            .addAction(0, "Snooze", doseActionIntent(AlarmActions.SNOOZE, medication.id, scheduledAt))
-            .addAction(0, "Skip", doseActionIntent(AlarmActions.SKIP, medication.id, scheduledAt))
+            .addAction(0, "Taken", doseActionIntent(ReminderActions.TAKE, medication.id, scheduledAt))
+            .addAction(0, "Snooze", doseActionIntent(ReminderActions.SNOOZE, medication.id, scheduledAt))
+            .addAction(0, "Skip", doseActionIntent(ReminderActions.SKIP, medication.id, scheduledAt))
             .build()
         notify(NotificationIds.dose(medication.id, scheduledAt), notification)
     }
@@ -162,8 +203,8 @@ class NotificationHelper @Inject constructor(
     private fun doseActionIntent(action: String, medId: Long, scheduledAt: Long): PendingIntent {
         val intent = Intent(context, DoseActionReceiver::class.java).apply {
             this.action = action
-            putExtra(AlarmActions.EXTRA_MED_ID, medId)
-            putExtra(AlarmActions.EXTRA_SCHEDULED_AT, scheduledAt)
+            putExtra(ReminderActions.EXTRA_MED_ID, medId)
+            putExtra(ReminderActions.EXTRA_SCHEDULED_AT, scheduledAt)
         }
         return PendingIntent.getBroadcast(
             context,
@@ -193,12 +234,23 @@ class NotificationHelper @Inject constructor(
     companion object {
         const val CHANNEL_DOSE = "dose_reminder"
         const val CHANNEL_LOW_STOCK = "low_stock"
+        private const val MAX_DIGEST_LINES = 6
     }
 }
+
+/** One dose that belongs in a morning or evening digest. */
+data class DigestEntry(
+    val profileName: String,
+    val medication: MedicationEntity,
+    val scheduledAt: Long,
+)
 
 object NotificationIds {
     private const val DOSE_BASE = 10_000
     private const val STOCK_BASE = 100_000_000
+
+    /** A single id, so the evening digest replaces the morning one. */
+    const val DIGEST = 5_000
 
     fun dose(medId: Long, scheduledAt: Long): Int =
         DOSE_BASE + (("$medId:$scheduledAt").hashCode() and 0x00FFFFFF)

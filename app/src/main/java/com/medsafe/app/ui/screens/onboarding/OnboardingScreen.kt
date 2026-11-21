@@ -18,9 +18,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.BatteryAlert
 import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -51,7 +51,7 @@ import com.medsafe.app.util.Permissions
 
 private const val STEP_WELCOME = 0
 private const val STEP_NOTIFICATIONS = 1
-private const val STEP_EXACT_ALARMS = 2
+private const val STEP_EXACT = 2
 private const val STEP_BATTERY = 3
 private const val STEP_DONE = 4
 private const val STEP_COUNT = 5
@@ -66,7 +66,7 @@ fun OnboardingScreen(
     val resumeCounter = rememberResumeCounter()
 
     val canNotify = remember(resumeCounter) { Permissions.canPostNotifications(context) }
-    val canExactAlarm = remember(resumeCounter) { Permissions.canScheduleExactAlarms(context) }
+    val canExact = remember(resumeCounter) { Permissions.canScheduleExactAlarms(context) }
     val batteryExempt = remember(resumeCounter) { Permissions.isIgnoringBatteryOptimizations(context) }
 
     val notificationLauncher = rememberLauncherForActivityResult(
@@ -118,19 +118,14 @@ fun OnboardingScreen(
                         "and later, notifications must be allowed explicitly.",
                     granted = canNotify,
                 )
-                STEP_EXACT_ALARMS -> PermissionStep(
-                    icon = Icons.Rounded.Schedule,
-                    title = "Exact alarms",
-                    headline = when {
-                        Build.VERSION.SDK_INT < Build.VERSION_CODES.S -> "Not required on this version"
-                        canExactAlarm -> "Exact alarms are allowed"
-                        else -> "Allow exact alarms"
-                    },
-                    body = "Android can delay ordinary alarms to save battery. MedSafe schedules " +
-                        "exact alarms so doses fire at the right time. Android 12 and later require " +
-                        "you to grant this in system settings. If it is denied, MedSafe still runs " +
-                        "with inexact alarms and shows a warning.",
-                    granted = canExactAlarm || Build.VERSION.SDK_INT < Build.VERSION_CODES.S,
+                STEP_EXACT -> PermissionStep(
+                    icon = Icons.Rounded.Alarm,
+                    title = "Exact timing",
+                    headline = if (canExact) "Exact reminders are on" else "Allow alarms & reminders",
+                    body = "This lets Android deliver each notification at the exact minute you set. " +
+                        "MedSafe does not ring an alarm; it only posts a normal notification. " +
+                        "Without it, reminders can arrive a few minutes late.",
+                    granted = canExact,
                 )
                 STEP_BATTERY -> PermissionStep(
                     icon = Icons.Rounded.BatteryAlert,
@@ -139,7 +134,8 @@ fun OnboardingScreen(
                     body = "Aggressive battery management on Xiaomi, Oppo, Vivo, Samsung and Huawei " +
                         "phones can stop reminders while the app is in the background. Exempt " +
                         "MedSafe from battery optimization, and check the manufacturer's app " +
-                        "settings for an extra “Autostart” or “No restrictions” switch.",
+                        "settings for an extra “Autostart” or “No restrictions” switch. Avoid force-stopping " +
+                        "MedSafe: Android cancels its reminders until you open the app again.",
                     granted = batteryExempt,
                 )
                 STEP_DONE -> DoneStep()
@@ -155,7 +151,7 @@ fun OnboardingScreen(
                     text = if (canNotify) "Continue" else "Allow notifications",
                     onClick = {
                         if (canNotify) {
-                            step = STEP_EXACT_ALARMS
+                            step = STEP_EXACT
                         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                         } else {
@@ -164,21 +160,17 @@ fun OnboardingScreen(
                     },
                 )
                 TextButton(
-                    onClick = { step = STEP_EXACT_ALARMS },
+                    onClick = { step = STEP_EXACT },
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 48.dp),
                 ) { Text("Skip for now") }
             }
-            STEP_EXACT_ALARMS -> {
+            STEP_EXACT -> {
                 PrimaryButton(
-                    text = if (canExactAlarm || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-                        "Continue"
-                    } else {
-                        "Allow exact alarms"
-                    },
+                    text = if (canExact) "Continue" else "Open alarm settings",
                     onClick = {
-                        if (canExactAlarm || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                        if (canExact) {
                             step = STEP_BATTERY
                         } else {
                             Permissions.openExactAlarmSettings(context)

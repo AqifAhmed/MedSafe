@@ -91,7 +91,7 @@ fun TodayScreen(
     LaunchedEffect(resumeCounter) { viewModel.refresh() }
 
     val canNotify = remember(resumeCounter) { Permissions.canPostNotifications(context) }
-    val canScheduleExact = remember(resumeCounter) { Permissions.canScheduleExactAlarms(context) }
+    val canExact = remember(resumeCounter) { Permissions.canScheduleExactAlarms(context) }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { }
@@ -180,13 +180,16 @@ fun TodayScreen(
                     )
                 }
             }
-            if (!canScheduleExact) {
+
+            if (!canExact) {
                 item {
                     InfoBanner(
-                        title = "Exact alarms are not allowed",
-                        message = "Reminders may arrive late. Allow exact alarms in settings.",
+                        title = "Exact timing is off",
+                        message = "Reminders may arrive a few minutes late until you allow alarms & reminders.",
                         icon = Icons.Rounded.AlarmOff,
-                        actionLabel = "Open",
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        actionLabel = "Allow",
                         onAction = { Permissions.openExactAlarmSettings(context) },
                     )
                 }

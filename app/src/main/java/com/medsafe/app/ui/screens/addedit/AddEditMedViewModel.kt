@@ -42,7 +42,7 @@ data class MedFormState(
     val pillColor1: Int = PillPalette.first(),
     val pillColor2: Int = PillPalette[1],
     val twoColors: Boolean = false,
-    val times: List<LocalTime> = listOf(LocalTime.of(8, 0)),
+    val times: List<LocalTime> = listOf(LocalTime.of(9, 0)),
     val repeatMode: RepeatMode = RepeatMode.DAILY,
     val weekdays: Set<DayOfWeek> = WeekdaysDefault,
     val intervalDays: String = "2",
@@ -127,7 +127,7 @@ class AddEditMedViewModel @Inject constructor(
             if (current.times.size >= MAX_TIMES) {
                 current
             } else {
-                val next = current.times.lastOrNull()?.plusHours(2) ?: LocalTime.of(8, 0)
+                val next = current.times.lastOrNull()?.plusHours(2) ?: LocalTime.of(9, 0)
                 current.copy(times = (current.times + next).sorted())
             }
         }
@@ -325,7 +325,7 @@ class AddEditMedViewModel @Inject constructor(
             pillColor1 = medication.pillColor1,
             pillColor2 = medication.pillColor2 ?: PillPalette[1],
             twoColors = medication.pillColor2 != null,
-            times = sortedSchedules.map { it.timeOfDay }.ifEmpty { listOf(LocalTime.of(8, 0)) },
+            times = sortedSchedules.map { it.timeOfDay }.ifEmpty { listOf(LocalTime.of(9, 0)) },
             repeatMode = repeatMode,
             weekdays = weekdays,
             intervalDays = interval.toString(),

@@ -142,4 +142,55 @@ class ScheduleCalculatorTest {
         val next = ScheduleCalculator.nextTrigger(med, schedule(), instant(start, 8), zone)
         assertEquals(instant(futureStart, 8), next)
     }
+
+    @Test
+    fun nextDigestIsMorningBeforeNine() {
+        assertEquals(
+            instant(start, 9),
+            ScheduleCalculator.nextDigest(instant(start, 8), zone),
+        )
+    }
+
+    @Test
+    fun nextDigestAfterMorningIsEvening() {
+        assertEquals(
+            instant(start, 21),
+            ScheduleCalculator.nextDigest(instant(start, 9), zone),
+        )
+    }
+
+    @Test
+    fun nextDigestAfterEveningIsNextMorning() {
+        assertEquals(
+            instant(start.plusDays(1), 9),
+            ScheduleCalculator.nextDigest(instant(start, 21), zone),
+        )
+    }
+
+    @Test
+    fun occurrencesBetweenSplitsAtTheDigest() {
+        val med = medication()
+        val morning = schedule(time = LocalTime.of(9, 30))
+        val afternoon = schedule(time = LocalTime.of(15, 0))
+        val night = schedule(time = LocalTime.of(22, 0))
+        val schedules = listOf(morning, afternoon, night)
+
+        val morningWindow = ScheduleCalculator.occurrencesBetween(
+            med,
+            schedules,
+            instant(start, 9),
+            instant(start, 21),
+            zone,
+        )
+        assertEquals(listOf(instant(start, 9, 30), instant(start, 15)), morningWindow)
+
+        val nightWindow = ScheduleCalculator.occurrencesBetween(
+            med,
+            schedules,
+            instant(start, 21),
+            instant(start.plusDays(1), 9),
+            zone,
+        )
+        assertEquals(listOf(instant(start, 22)), nightWindow)
+    }
 }

@@ -13,6 +13,7 @@ import com.medsafe.app.data.settings.SettingsRepository
 import com.medsafe.app.util.DateUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +22,9 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Duration
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import javax.inject.Inject
 
@@ -50,6 +53,18 @@ class TodayViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val date = MutableStateFlow(LocalDate.now())
+
+    init {
+        // Keep the timeline on the right day if the screen stays open past midnight.
+        viewModelScope.launch {
+            while (true) {
+                val now = LocalDateTime.now()
+                val untilMidnight = Duration.between(now, now.toLocalDate().plusDays(1).atStartOfDay())
+                delay(untilMidnight.toMillis() + 1_000L)
+                date.value = LocalDate.now()
+            }
+        }
+    }
 
     private val activeProfile = combine(
         profileRepository.profiles,

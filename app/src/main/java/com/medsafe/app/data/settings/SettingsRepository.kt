@@ -23,7 +23,6 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val snoozeMinutes: Int = 10,
-    val renudgeMinutes: Int = 15,
     val soundEnabled: Boolean = true,
     val onboardingComplete: Boolean = false,
     val activeProfileId: Long? = null,
@@ -40,7 +39,6 @@ class SettingsRepository @Inject constructor(
     private object Keys {
         val themeMode = stringPreferencesKey("theme_mode")
         val snoozeMinutes = intPreferencesKey("snooze_minutes")
-        val renudgeMinutes = intPreferencesKey("renudge_minutes")
         val soundEnabled = booleanPreferencesKey("sound_enabled")
         val onboardingComplete = booleanPreferencesKey("onboarding_complete")
         val activeProfileId = longPreferencesKey("active_profile_id")
@@ -56,7 +54,6 @@ class SettingsRepository @Inject constructor(
                     ?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
                     ?: ThemeMode.SYSTEM,
                 snoozeMinutes = prefs[Keys.snoozeMinutes] ?: 10,
-                renudgeMinutes = prefs[Keys.renudgeMinutes] ?: 15,
                 soundEnabled = prefs[Keys.soundEnabled] ?: true,
                 onboardingComplete = prefs[Keys.onboardingComplete] ?: false,
                 activeProfileId = prefs[Keys.activeProfileId],
@@ -69,10 +66,6 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setSnoozeMinutes(minutes: Int) {
         context.settingsDataStore.edit { it[Keys.snoozeMinutes] = minutes.coerceIn(5, 60) }
-    }
-
-    suspend fun setRenudgeMinutes(minutes: Int) {
-        context.settingsDataStore.edit { it[Keys.renudgeMinutes] = minutes.coerceIn(5, 60) }
     }
 
     suspend fun setSoundEnabled(enabled: Boolean) {

@@ -42,7 +42,7 @@ Fields:
 - Form: tablet, capsule, liquid, injection, drops, inhaler, other
 - Quantity per dose (number plus unit, e.g. 2 tablets, 5 ml)
 - Pill icon: shape and colors (see 4.3)
-- Frequency: 1 to 6 times per day, each with its own time of day. Optional repeat rule: every day (default), specific weekdays, or every X days.
+- Frequency: 1 to 6 times per day, each with its own time of day (the first time defaults to 09:00). Optional repeat rule: every day (default), specific weekdays, or every X days. Daily times feed the two consolidated digests described in 4.4; they do not each produce a notification.
 - Duration, a required toggle:
   - **Fixed:** start date plus either number of days or an end date
   - **Ongoing:** no end date
@@ -61,13 +61,14 @@ Rules:
 - Build as a reusable `PillIcon(shape, color1, color2, size)` composable used in lists, cards, notifications (render to bitmap for the large icon), and the add/edit flow.
 
 ### 4.4 Reminders and notifications
-- A notification fires at each scheduled time.
-- Title includes the profile name so it is clear whose dose it is (e.g. "Aqif: time for Vitamin D"). Body shows quantity and any note.
-- Actions: **Taken**, **Snooze** (default 10 min, configurable), **Skip**.
-- Unacknowledged doses re-nudge once (default 15 min), then are logged as **missed**.
-- Reschedule all alarms on: device reboot (`BOOT_COMPLETED`), timezone change, time change, and app update (`MY_PACKAGE_REPLACED`).
+- Exactly **two consolidated digest notifications per day**, at 09:00 (morning) and 21:00 (evening) local time. A medication with several daily times never produces more than these two notifications.
+- The morning digest lists every dose scheduled from 09:00 up to (but not including) 21:00. The evening digest lists every dose scheduled from 21:00 up to (but not including) 09:00 the next morning. Every dose therefore belongs to exactly one digest.
+- The digest title states the slot and the number of doses. Each line includes the profile name, medication name, quantity, and scheduled time, e.g. "Aqif: Vitamin D — 1 tablet at 9:00 AM". Doses from every profile are grouped into the same digest so family reminders are never lost.
+- A single notification id is used, so the evening digest replaces any morning digest still in the notification shade. Tapping the digest opens Today.
+- **Taken**, **Snooze** (default 10 min, configurable), and **Skip** are recorded from the Today screen. Snooze is the only per-dose notification: it re-posts the single-dose reminder with Taken / Snooze / Skip actions after the snooze delay, and those actions work without opening the app (a `BroadcastReceiver` writes to `DoseLog`).
+- A dose still unanswered 15 minutes after its scheduled time is logged as **missed** at the next digest or the next app launch. There is no automatic re-nudge.
+- Reschedule the digest alarms on: device reboot (`BOOT_COMPLETED`), timezone change, time change, and app update (`MY_PACKAGE_REPLACED`).
 - Notification channels are per urgency, not per medication: `dose_reminder` (high importance) and `low_stock` (default importance).
-- Notification actions must work without opening the app (use a `BroadcastReceiver`) and must write to `DoseLog`.
 
 ### 4.5 Screens
 1. **Today:** timeline of doses grouped by time, with checkable cards, for the active profile
@@ -161,8 +162,8 @@ Values marked "derive" or "e.g." are proposals. Finalize the remaining Material 
 
 ## 9. Acceptance criteria (v1)
 
-- A med with 3 daily times fires 3 notifications at the correct times, including after a reboot.
-- Taken / Snooze / Skip from the notification update `DoseLog` without opening the app.
+- A med with 3 daily times appears as three entries in the correct morning or evening digest; exactly two digest notifications are posted per day, including after a reboot.
+- Taken / Snooze / Skip from Today update `DoseLog`; a snooze notification re-posts with actions that work without opening the app.
 - A fixed-duration med stops reminding and auto-archives after its end date; an ongoing med never does.
 - The 4th profile cannot be created.
 - Each profile sees only its own meds and history.

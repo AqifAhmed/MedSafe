@@ -555,7 +555,8 @@ private fun ScheduleStep(
         Column(Modifier.padding(16.dp)) {
             SectionHeader(
                 title = "Times of day",
-                subtitle = "Up to ${AddEditMedViewModel.MAX_TIMES} daily times.",
+                subtitle = "Up to ${AddEditMedViewModel.MAX_TIMES} daily times. " +
+                    "Reminders arrive as one morning and one evening summary.",
             )
             Spacer(Modifier.height(10.dp))
             state.times.forEachIndexed { index, time ->
@@ -835,7 +836,7 @@ private fun ExtrasStep(state: MedFormState, viewModel: AddEditMedViewModel) {
                                 viewModel.update { it.copy(stock = value) }
                             }
                         },
-                        label = { Text("Stock count") },
+                        label = { Text("Stock (${state.doseUnit.trim().ifBlank { "units" }})") },
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                             keyboardType = KeyboardType.Number,
                         ),
@@ -859,7 +860,7 @@ private fun ExtrasStep(state: MedFormState, viewModel: AddEditMedViewModel) {
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "Stock decreases each time you mark a dose Taken and never goes below zero.",
+                    text = "Stock is counted in ${state.doseUnit.trim().ifBlank { "units" }}. It drops by the dose quantity each time you mark a dose Taken and never goes below zero.",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

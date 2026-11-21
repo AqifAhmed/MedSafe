@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.BatteryAlert
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -28,7 +29,6 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -72,7 +72,7 @@ fun SettingsScreen(
     val resumeCounter = rememberResumeCounter()
 
     val canNotify = remember(resumeCounter) { Permissions.canPostNotifications(context) }
-    val canExactAlarm = remember(resumeCounter) { Permissions.canScheduleExactAlarms(context) }
+    val canExact = remember(resumeCounter) { Permissions.canScheduleExactAlarms(context) }
     val batteryExempt = remember(resumeCounter) { Permissions.isIgnoringBatteryOptimizations(context) }
 
     val notificationLauncher = rememberLauncherForActivityResult(
@@ -140,12 +140,13 @@ fun SettingsScreen(
                         onDecrease = { viewModel.setSnoozeMinutes(settings.snoozeMinutes - 5) },
                         onIncrease = { viewModel.setSnoozeMinutes(settings.snoozeMinutes + 5) },
                     )
-                    StepperRow(
-                        title = "Re-nudge after",
-                        description = "If a dose is not answered, nudge once, then mark it missed.",
-                        value = "${settings.renudgeMinutes} min",
-                        onDecrease = { viewModel.setRenudgeMinutes(settings.renudgeMinutes - 5) },
-                        onIncrease = { viewModel.setRenudgeMinutes(settings.renudgeMinutes + 5) },
+                    Text(
+                        text = "Doses are summarised in one morning notification (9:00 AM) and one " +
+                            "evening notification (9:00 PM). Unanswered doses are marked missed " +
+                            "at the next summary.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
                     )
                     Row(
                         modifier = Modifier
@@ -193,15 +194,15 @@ fun SettingsScreen(
                         },
                     )
                     PermissionRow(
-                        icon = Icons.Rounded.Schedule,
-                        title = "Exact alarms",
-                        description = when {
-                            Build.VERSION.SDK_INT < Build.VERSION_CODES.S -> "Not required on this Android version."
-                            canExactAlarm -> "Allowed. Reminders fire at the exact time."
-                            else -> "Off — reminders may arrive late."
+                        icon = Icons.Rounded.Alarm,
+                        title = "Alarms & reminders",
+                        description = if (canExact) {
+                            "Allowed — reminders arrive at the exact minute."
+                        } else {
+                            "Off — reminders may arrive a few minutes late."
                         },
-                        granted = canExactAlarm,
-                        actionLabel = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) null else "Open",
+                        granted = canExact,
+                        actionLabel = if (canExact) "Manage" else "Allow",
                         onAction = { Permissions.openExactAlarmSettings(context) },
                     )
                     PermissionRow(
@@ -230,7 +231,8 @@ fun SettingsScreen(
                         text = "On Xiaomi, Oppo, Vivo, Samsung and Huawei devices, also set MedSafe " +
                             "to “No restrictions” or “Autostart allowed” in the phone's battery settings. " +
                             "The button above opens the Android exemption screen; the manufacturer's " +
-                            "app settings may have an extra switch.",
+                            "app settings may have an extra switch. Do not force-stop MedSafe: Android cancels " +
+                            "all reminders until the app is opened again.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

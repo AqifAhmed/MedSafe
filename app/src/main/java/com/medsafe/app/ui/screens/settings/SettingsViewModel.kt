@@ -33,10 +33,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setSnoozeMinutes(minutes) }
     }
 
-    fun setRenudgeMinutes(minutes: Int) {
-        viewModelScope.launch { settingsRepository.setRenudgeMinutes(minutes) }
-    }
-
     fun setSoundEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setSoundEnabled(enabled)

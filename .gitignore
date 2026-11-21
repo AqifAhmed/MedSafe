@@ -9,3 +9,6 @@ captures/
 .cxx/
 local.properties
 *.hprof
+keystore.properties
+*.jks
+*.keystore

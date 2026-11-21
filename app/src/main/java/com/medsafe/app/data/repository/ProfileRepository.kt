@@ -2,10 +2,12 @@ package com.medsafe.app.data.repository
 
 import com.medsafe.app.data.local.dao.ProfileDao
 import com.medsafe.app.data.local.entity.ProfileEntity
-import com.medsafe.app.alarm.AlarmScheduler
+import com.medsafe.app.alarm.ReminderScheduler
 import com.medsafe.app.data.settings.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -15,8 +17,10 @@ class ProfileLimitException : IllegalStateException("MedSafe supports at most 3 
 class ProfileRepository @Inject constructor(
     private val profileDao: ProfileDao,
     private val settingsRepository: SettingsRepository,
-    private val alarmScheduler: AlarmScheduler,
+    private val reminderScheduler: ReminderScheduler,
 ) {
+    private val addMutex = Mutex()
+
     val profiles: Flow<List<ProfileEntity>> = profileDao.observeAll()
 
     /** Seeds the owner profile on first launch and repairs a missing active-profile pointer. */
@@ -47,18 +51,23 @@ class ProfileRepository @Inject constructor(
     suspend fun addProfile(name: String, color: Int, avatar: String = ProfileEntity.AVATAR_INITIALS): Result<Long> {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return Result.failure(IllegalArgumentException("Name is required"))
-        if (profileDao.count() >= ProfileEntity.MAX_PROFILES) {
-            return Result.failure(ProfileLimitException())
+        // Count-then-insert must be atomic or two quick taps could create a fourth profile.
+        return addMutex.withLock {
+            if (profileDao.count() >= ProfileEntity.MAX_PROFILES) {
+                Result.failure(ProfileLimitException())
+            } else {
+                Result.success(
+                    profileDao.insert(
+                        ProfileEntity(
+                            name = trimmed,
+                            color = color,
+                            avatar = avatar,
+                            isMain = false,
+                        ),
+                    ),
+                )
+            }
         }
-        val id = profileDao.insert(
-            ProfileEntity(
-                name = trimmed,
-                color = color,
-                avatar = avatar,
-                isMain = false,
-            ),
-        )
-        return Result.success(id)
     }
 
     suspend fun updateProfile(profile: ProfileEntity) {
@@ -73,7 +82,7 @@ class ProfileRepository @Inject constructor(
         if (profile.isMain) return false
         profileDao.delete(profile)
         // Deleting the profile cascades its meds and logs; drop their pending alarms too.
-        alarmScheduler.scheduleAll()
+        reminderScheduler.scheduleAll()
         val current = profileDao.getAll()
         val active = activeProfileIdOrNull()
         if (active == profileId || active == null) {

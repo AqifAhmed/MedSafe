@@ -35,9 +35,35 @@ interface DoseLogDao {
         to: Long,
     ): Flow<List<DoseLogWithMedication>>
 
+    @Query("SELECT * FROM dose_logs WHERE scheduledAt >= :from AND scheduledAt <= :to")
+    suspend fun getBetween(from: Long, to: Long): List<DoseLogEntity>
+
+    @Query("SELECT * FROM dose_logs WHERE status = 'SNOOZED'")
+    suspend fun getSnoozed(): List<DoseLogEntity>
+
+    /**
+     * Closes out doses that were announced in an earlier digest window and never answered.
+     * Snoozed doses are left alone because they have their own follow-up alarm.
+     */
+    @Query(
+        "UPDATE dose_logs SET status = 'MISSED', actedAt = :at " +
+            "WHERE status = 'PENDING' AND scheduledAt < :before",
+    )
+    suspend fun markPendingMissedBefore(before: Long, at: Long)
+
     @Query("SELECT * FROM dose_logs WHERE medId = :medId ORDER BY scheduledAt DESC")
     suspend fun getForMed(medId: Long): List<DoseLogEntity>
 
     @Query("DELETE FROM dose_logs WHERE medId = :medId")
     suspend fun deleteForMed(medId: Long)
+
+    /**
+     * Drops future PENDING rows when a schedule changes, so a stale digest entry is not later
+     * counted as missed. The next digest recreates rows for the new times.
+     */
+    @Query(
+        "DELETE FROM dose_logs WHERE medId = :medId " +
+            "AND status = 'PENDING' AND scheduledAt > :after",
+    )
+    suspend fun deletePendingAfter(medId: Long, after: Long)
 }

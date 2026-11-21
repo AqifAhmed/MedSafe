@@ -12,7 +12,7 @@ import com.medsafe.app.data.local.entity.MedicationWithSchedules
 import com.medsafe.app.data.local.entity.ScheduleTimeEntity
 import com.medsafe.app.data.model.DoseStatus
 import com.medsafe.app.di.ApplicationScope
-import com.medsafe.app.alarm.AlarmScheduler
+import com.medsafe.app.alarm.ReminderScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
@@ -26,7 +26,7 @@ class MedicationRepository @Inject constructor(
     private val medicationDao: MedicationDao,
     private val scheduleTimeDao: ScheduleTimeDao,
     private val doseLogDao: DoseLogDao,
-    private val alarmScheduler: AlarmScheduler,
+    private val reminderScheduler: ReminderScheduler,
     @ApplicationScope private val appScope: CoroutineScope,
 ) {
     fun observeAllWithSchedules(profileId: Long): Flow<List<MedicationWithSchedules>> =
@@ -57,6 +57,8 @@ class MedicationRepository @Inject constructor(
             if (schedules.isNotEmpty()) {
                 scheduleTimeDao.insertAll(schedules.map { it.copy(id = 0, medId = id) })
             }
+            // The old schedule's future digest rows no longer describe a real dose.
+            doseLogDao.deletePendingAfter(id, System.currentTimeMillis())
             id
         }
         reschedule()
@@ -66,13 +68,17 @@ class MedicationRepository @Inject constructor(
     suspend fun setArchived(medId: Long, archived: Boolean) {
         val med = medicationDao.getById(medId) ?: return
         medicationDao.update(med.copy(archived = archived))
+        if (archived) doseLogDao.deletePendingAfter(medId, System.currentTimeMillis())
         reschedule()
     }
 
     suspend fun delete(medId: Long) {
         val med = medicationDao.getById(medId) ?: return
+        // Drop this medication's pending snooze alarms before its logs cascade away.
+        doseLogDao.getForMed(medId).forEach { log ->
+            reminderScheduler.cancelSnooze(medId, log.scheduledAt)
+        }
         medicationDao.delete(med)
-        alarmScheduler.cancelAll()
         reschedule()
     }
 
@@ -88,7 +94,7 @@ class MedicationRepository @Inject constructor(
 
     /** Alarms are cheap to rebuild, and rebuilding is the safest way to drop stale ones. */
     fun reschedule() {
-        appScope.launch { alarmScheduler.scheduleAll() }
+        appScope.launch { reminderScheduler.scheduleAll() }
     }
 
     suspend fun getLogsForMed(medId: Long): List<DoseLogEntity> = doseLogDao.getForMed(medId)
@@ -112,6 +118,14 @@ class MedicationRepository @Inject constructor(
         }
         doseLogDao.updateStatus(existing.id, status, now)
         return existing.copy(status = status, actedAt = now)
+    }
+
+    /**
+     * Doses announced in an earlier digest that are still unanswered become MISSED. Nothing is
+     * posted: only the two daily digests notify.
+     */
+    suspend fun markUnansweredBefore(before: Long) {
+        doseLogDao.markPendingMissedBefore(before, System.currentTimeMillis())
     }
 
     /** Creates a PENDING log if none exists and returns the current row. */

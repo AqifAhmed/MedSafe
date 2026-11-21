@@ -3,6 +3,7 @@ package com.medsafe.app.di
 import android.content.Context
 import androidx.room.Room
 import com.medsafe.app.data.local.MedSafeDatabase
+import com.medsafe.app.data.local.MedSafeMigrations
 import com.medsafe.app.data.local.dao.DoseLogDao
 import com.medsafe.app.data.local.dao.MedicationDao
 import com.medsafe.app.data.local.dao.ProfileDao
@@ -24,7 +25,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): MedSafeDatabase =
         Room.databaseBuilder(context, MedSafeDatabase::class.java, MedSafeDatabase.NAME)
-            .fallbackToDestructiveMigration()
+            .addMigrations(*MedSafeMigrations.ALL)
             .build()
 
     @Provides

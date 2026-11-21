@@ -18,17 +18,17 @@ class DoseActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
-        val medId = intent.getLongExtra(AlarmActions.EXTRA_MED_ID, -1L)
-        val scheduledAt = intent.getLongExtra(AlarmActions.EXTRA_SCHEDULED_AT, -1L)
+        val medId = intent.getLongExtra(ReminderActions.EXTRA_MED_ID, -1L)
+        val scheduledAt = intent.getLongExtra(ReminderActions.EXTRA_SCHEDULED_AT, -1L)
         if (medId <= 0L || scheduledAt <= 0L) return
 
         val pendingResult = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 when (action) {
-                    AlarmActions.TAKE -> doseActionHandler.markTaken(medId, scheduledAt)
-                    AlarmActions.SKIP -> doseActionHandler.markSkipped(medId, scheduledAt)
-                    AlarmActions.SNOOZE -> doseActionHandler.snooze(medId, scheduledAt)
+                    ReminderActions.TAKE -> doseActionHandler.markTaken(medId, scheduledAt)
+                    ReminderActions.SKIP -> doseActionHandler.markSkipped(medId, scheduledAt)
+                    ReminderActions.SNOOZE -> doseActionHandler.snooze(medId, scheduledAt)
                 }
             } catch (error: Throwable) {
                 Log.e(TAG, "Dose action failed: $action", error)
