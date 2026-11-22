@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AlarmOff
@@ -34,9 +35,9 @@ import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Snooze
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,7 +53,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,7 +83,6 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayScreen(
-    onAddMedication: () -> Unit,
     onOpenProfiles: () -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: TodayViewModel = hiltViewModel(),
@@ -88,6 +90,7 @@ fun TodayScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val resumeCounter = rememberResumeCounter()
+    var takeAllPrompt by remember { mutableStateOf<TakeAllPrompt?>(null) }
     LaunchedEffect(resumeCounter) { viewModel.refresh() }
 
     val canNotify = remember(resumeCounter) { Permissions.canPostNotifications(context) }
@@ -146,19 +149,12 @@ fun TodayScreen(
                 )
             }
         },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onAddMedication,
-                icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
-                text = { Text("Add medication") },
-            )
-        },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             if (!canNotify) {
@@ -209,19 +205,39 @@ fun TodayScreen(
                         } else {
                             "Add a medication to start tracking doses."
                         },
-                        actionLabel = "Add medication",
-                        onAction = onAddMedication,
                     )
                 }
             }
 
             groups.forEach { (bucket, doses) ->
                 item(key = "section-${bucket.order}") {
-                    SectionHeader(
-                        title = bucket.label,
-                        subtitle = "${doses.count { it.status == DoseStatus.TAKEN }} of ${doses.size} taken",
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        SectionHeader(
+                            title = bucket.label,
+                            subtitle = "${doses.count { it.status == DoseStatus.TAKEN }} of ${doses.size} taken",
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (bucket.takeAll && doses.any { it.canTake }) {
+                            Spacer(Modifier.width(8.dp))
+                            OutlinedButton(
+                                onClick = { takeAllPrompt = TakeAllPrompt(bucket.label, doses) },
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text("Take all")
+                            }
+                        }
+                    }
                 }
                 items(
                     items = doses,
@@ -237,6 +253,84 @@ fun TodayScreen(
             }
         }
     }
+
+    takeAllPrompt?.let { prompt ->
+        TakeAllDialog(
+            prompt = prompt,
+            onDismiss = { takeAllPrompt = null },
+            onConfirm = {
+                viewModel.markAllTaken(prompt.doses)
+                takeAllPrompt = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun TakeAllDialog(
+    prompt: TakeAllPrompt,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val pending = prompt.doses.filter { it.canTake }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Take all — ${prompt.label}") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    text = "These doses will be marked as taken:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                prompt.doses.forEach { dose ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = dose.medication.name,
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            Text(
+                                text = Format.doseAmount(dose.medication),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Text(
+                            text = when (dose.status) {
+                                DoseStatus.TAKEN -> "Taken"
+                                DoseStatus.SKIPPED -> "Skipped"
+                                else -> Format.time(dose.time)
+                            },
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = pending.isNotEmpty(),
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) {
+                Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Take all")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -388,11 +482,12 @@ private fun DoseCard(
     }
 }
 
-private data class TimeBucket(val order: Int, val label: String)
+private data class TimeBucket(val order: Int, val label: String, val takeAll: Boolean = false)
 
 private fun timeBucket(time: LocalTime): TimeBucket = when (time.hour) {
-    in 0..11 -> TimeBucket(0, "Morning")
+    in 0..11 -> TimeBucket(0, "Morning", takeAll = true)
     in 12..16 -> TimeBucket(1, "Afternoon")
-    in 17..20 -> TimeBucket(2, "Evening")
-    else -> TimeBucket(3, "Night")
+    else -> TimeBucket(2, "Evening", takeAll = true)
 }
+
+private data class TakeAllPrompt(val label: String, val doses: List<TodayDose>)

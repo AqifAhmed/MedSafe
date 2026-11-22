@@ -33,7 +33,12 @@ data class TodayDose(
     val time: LocalTime,
     val scheduledAt: Long,
     val status: DoseStatus,
-)
+) {
+    val canTake: Boolean
+        get() = status == DoseStatus.PENDING ||
+            status == DoseStatus.SNOOZED ||
+            status == DoseStatus.MISSED
+}
 
 data class TodayUiState(
     val loading: Boolean = true,
@@ -143,6 +148,13 @@ class TodayViewModel @Inject constructor(
     fun markTaken(dose: TodayDose) {
         viewModelScope.launch {
             doseActionHandler.markTaken(dose.medication.id, dose.scheduledAt)
+        }
+    }
+
+    fun markAllTaken(doses: List<TodayDose>) {
+        viewModelScope.launch {
+            doses.filter { it.canTake }
+                .forEach { doseActionHandler.markTaken(it.medication.id, it.scheduledAt) }
         }
     }
 

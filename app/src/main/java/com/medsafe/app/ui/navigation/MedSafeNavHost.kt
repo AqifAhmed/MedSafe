@@ -86,7 +86,6 @@ fun MedSafeApp(
         ) {
             composable(Routes.TODAY) {
                 TodayScreen(
-                    onAddMedication = { navController.navigate(Routes.addEditMed()) },
                     onOpenProfiles = { navController.navigate(Routes.PROFILES) },
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 )
@@ -124,7 +123,6 @@ fun MedSafeApp(
             composable(Routes.SETTINGS) {
                 SettingsScreen(
                     onOpenProfiles = { navController.navigate(Routes.PROFILES) },
-                    onOpenOnboarding = { navController.navigate(Routes.ONBOARDING) },
                 )
             }
             composable(Routes.ONBOARDING) {
